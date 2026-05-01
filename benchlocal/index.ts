@@ -4,11 +4,12 @@ import {
   loadBenchPackManifest,
   requireScoredResults,
   type ScenarioRunInput,
-  type ScenarioResult
+  type ScenarioResult,
+  type ProgressEmitter
 } from "@benchlocal/sdk";
 
 import { SCENARIOS, getScenarioCards, scoreModelResults } from "../lib/benchmark";
-import { runScenarioForModel } from "../lib/orchestrator";
+import { runScenario } from "../lib/orchestrator";
 
 const manifest = loadBenchPackManifest(__dirname);
 
@@ -22,19 +23,42 @@ export default defineBenchPack({
       id: scenario.id,
       title: scenario.title,
       category: scenario.category,
+      description: scenario.description,
       detailCards: getScenarioCards(scenario)
     }));
   },
 
   async prepare(context) {
     const helpers = createHostHelpers(context);
+
     return {
-      async runScenario(input: ScenarioRunInput): Promise<ScenarioResult> {
-        return runScenarioForModel(input, helpers) as Promise<ScenarioResult>;
+      async runScenario(input: ScenarioRunInput, emit: ProgressEmitter): Promise<ScenarioResult> {
+        const endpoint = helpers.getRequiredInferenceEndpoint(input.model.id);
+
+        return runScenario(
+          input.scenario.id,
+          {
+            baseUrl: endpoint.baseUrl,
+            authMode: endpoint.authMode,
+            apiKey: endpoint.apiKey,
+            model: endpoint.exposedModel
+          },
+          {
+            temperature: input.generation.temperature,
+            top_p: input.generation.top_p
+          },
+          (msg) => {
+            void emit({
+              type: "model_progress",
+              modelId: input.model.id,
+              scenarioId: input.scenario.id,
+              message: msg
+            });
+          }
+        );
       },
-      async dispose() {
-        // No persistent state to clean up
-      }
+
+      async dispose() {}
     };
   },
 

@@ -35,7 +35,18 @@ A [BenchLocal](https://github.com/stevibe/BenchLocal) Bench Pack for measuring l
 
 ### Via BenchLocal
 
-Install and load this pack through the BenchLocal UI. The pack entry point is `dist/benchlocal/index.js`.
+Import this pack into BenchLocal using the archive URL published automatically on every release:
+
+```
+https://github.com/madcato/SpeedBench-15/releases/latest/download/speedbench-15.tar.gz
+```
+
+**Steps:**
+
+1. Open BenchLocal and go to **Packs → Import Pack**.
+2. Select **From URL** and paste the URL above.
+3. BenchLocal will download and install the pack automatically.
+4. Select **SpeedBench-15** from the pack list and run your benchmark.
 
 ### CLI (local testing)
 

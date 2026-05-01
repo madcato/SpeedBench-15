@@ -1,5 +1,3 @@
-import type { ScenarioCard } from "@benchlocal/sdk";
-
 export interface SpeedScenario {
   id: string;
   title: string;
@@ -159,22 +157,22 @@ export const SCENARIOS: SpeedScenario[] = [
   }
 ];
 
-export function getScenarioCards(scenario: SpeedScenario): ScenarioCard[] {
+export function getScenarioCards(scenario: SpeedScenario): Array<{ title: string; content: string }> {
   return [
     {
-      label: "What this tests",
+      title: "What this tests",
       content: scenario.description
     },
     {
-      label: "Input size",
+      title: "Input size",
       content: `~${scenario.promptTokens} prompt tokens`
     },
     {
-      label: "Output target",
+      title: "Output target",
       content: `${scenario.targetTokens} tokens`
     },
     {
-      label: "Key metric",
+      title: "Key metric",
       content: scenario.isCacheTest
         ? "Cache speedup ratio"
         : scenario.targetTokens === 1
@@ -194,7 +192,11 @@ export function scoreModelResults(results: any[]): BenchmarkScore {
   ];
 
   const categoryScores = categories.map(cat => {
-    const catResults = results.filter(r => r.category === cat);
+    // ScenarioResult only carries scenarioId, not category — resolve via SCENARIOS
+    const catResults = results.filter(r => {
+      const scenario = SCENARIOS.find(s => s.id === r.scenarioId);
+      return scenario?.category === cat;
+    });
     return {
       id: cat.toLowerCase().replace(/\s+/g, "-"),
       label: cat,
@@ -203,16 +205,17 @@ export function scoreModelResults(results: any[]): BenchmarkScore {
   });
 
   const totalScore = categoryScores.reduce((sum, c) => sum + c.score, 0) / categories.length;
+  const totalScoreRounded = Math.round(totalScore * 10) / 10;
 
   return {
-    totalScore: Math.round(totalScore),
+    totalScore: totalScoreRounded,
     categories: categoryScores,
-    summary: `SpeedBench-15 performance score: ${Math.round(totalScore)}/100`
+    summary: `SpeedBench-15 performance score: ${totalScoreRounded}/100`
   };
 }
 
 function calculateCategoryScore(results: any[]): number {
   if (results.length === 0) return 0;
   const avg = results.reduce((sum, r) => sum + (r.score ?? 0), 0) / results.length;
-  return avg;
+  return Math.round(avg * 10) / 10;
 }

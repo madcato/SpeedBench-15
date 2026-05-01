@@ -1,9 +1,21 @@
 import * as fs from "fs";
 import * as path from "path";
-import type { ScenarioRunInput, HostHelpers } from "@benchlocal/sdk";
+import type { ScenarioResult } from "@benchlocal/sdk";
 import type { SpeedScenario } from "./benchmark";
 import { SCENARIOS } from "./benchmark";
 import { computeMetrics, computeCacheMetrics, type TimingRecord } from "./metrics";
+
+export interface InferenceConfig {
+  baseUrl: string;
+  authMode?: "none" | "bearer";
+  apiKey?: string;
+  model: string;
+}
+
+type GenerationOptions = {
+  temperature?: number;
+  top_p?: number;
+};
 
 interface RunResult {
   ttftMs: number;
@@ -14,15 +26,15 @@ interface RunResult {
   generatedText: string;
 }
 
-export async function runScenarioForModel(
-  input: ScenarioRunInput,
-  helpers: HostHelpers
-): Promise<any> {
-  const { generationSettings, emit } = input;
-  const scenario = SCENARIOS.find(s => s.id === input.scenarioId);
-
+export async function runScenario(
+  scenarioId: string,
+  inferenceConfig: InferenceConfig,
+  generation: GenerationOptions,
+  onProgress?: (msg: string) => void
+): Promise<ScenarioResult> {
+  const scenario = SCENARIOS.find(s => s.id === scenarioId);
   if (!scenario) {
-    throw new Error(`Unknown scenario: ${input.scenarioId}`);
+    throw new Error(`Unknown scenario: ${scenarioId}`);
   }
 
   const metrics: {
@@ -43,15 +55,12 @@ export async function runScenarioForModel(
     generatedTokens: 0
   };
 
-  emit({ type: "run_started" });
-  emit({ type: "scenario_started" });
-
   const messages = buildMessages(scenario);
 
   const coldRun = await executeStreamingRun(
     messages,
-    generationSettings,
-    helpers,
+    inferenceConfig,
+    generation,
     scenario.promptTokens,
     scenario.targetTokens
   );
@@ -63,11 +72,11 @@ export async function runScenarioForModel(
   metrics.totalLatencyMs = coldRun.totalLatencyMs;
 
   if (scenario.isCacheTest) {
-    emit({ type: "model_progress", detail: "Cache warm-up complete. Running cached request..." });
+    onProgress?.("Cache warm-up complete. Running cached request...");
     const cachedRun = await executeStreamingRun(
       messages,
-      generationSettings,
-      helpers,
+      inferenceConfig,
+      generation,
       scenario.promptTokens,
       scenario.targetTokens
     );
@@ -76,31 +85,28 @@ export async function runScenarioForModel(
     metrics.cacheHitRate = cacheMetrics.cacheHitRate;
   }
 
-  const summary = buildSummary(metrics, scenario);
-  const startedAt = new Date().toISOString();
-
   return {
     scenarioId: scenario.id,
-    category: scenario.category,
     status: "pass",
     score: calculateScenarioScore(metrics, scenario),
-    summary,
+    summary: buildSummary(metrics, scenario),
     rawLog: JSON.stringify(metrics, null, 2),
     timings: {
-      startedAt,
+      startedAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
       durationMs: metrics.totalLatencyMs
     },
     output: {
-      text: coldRun.generatedText
+      finalAnswer: coldRun.generatedText,
+      assistantMessages: [coldRun.generatedText]
     }
   };
 }
 
 async function executeStreamingRun(
-  messages: any[],
-  settings: any,
-  helpers: HostHelpers,
+  messages: Array<{ role: string; content: string }>,
+  config: InferenceConfig,
+  generation: GenerationOptions,
   promptTokens: number,
   maxTokens: number
 ): Promise<RunResult> {
@@ -113,53 +119,87 @@ async function executeStreamingRun(
 
   let generatedText = "";
 
-  const response = await helpers.chatCompletion({
-    messages,
-    max_tokens: maxTokens,
-    temperature: settings?.temperature ?? 0,
-    stream: true
+  // Normalize: strip trailing slash and any trailing /v1 so we always control the full path
+  const base = config.baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if ((config.authMode ?? "bearer") === "bearer" && config.apiKey) {
+    headers["Authorization"] = `Bearer ${config.apiKey}`;
+  }
+
+  const resp = await fetch(`${base}/v1/chat/completions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: config.model,
+      messages,
+      // Add 2048 headroom so thinking models don't exhaust the budget before generating content
+      max_tokens: maxTokens + 2048,
+      temperature: generation.temperature ?? 0,
+      stream: true
+    })
   });
 
-  for await (const chunk of response) {
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+  }
+
+  for await (const chunk of sseStream(resp)) {
     const now = performance.now();
     if (timing.firstTokenTime === null) {
       timing.firstTokenTime = now;
     }
-    const delta = chunk.choices?.[0]?.delta?.content ?? "";
-    if (delta) {
+    const deltaObj = chunk.choices?.[0]?.delta ?? {};
+    const content: string = deltaObj.content ?? "";
+    // Capture thinking tokens under both common field names (vLLM: "reasoning", OpenAI-compat: "reasoning_content")
+    const reasoning: string = deltaObj.reasoning ?? deltaObj.reasoning_content ?? "";
+    const token = content || reasoning;
+    if (token) {
       timing.tokenTimestamps.push(now);
-      generatedText += delta;
+      generatedText += content;
     }
   }
 
   timing.completionTime = performance.now();
-
   const computed = computeMetrics(timing, promptTokens);
 
-  return {
-    ...computed,
-    generatedText
-  };
+  return { ...computed, generatedText };
 }
 
-function buildMessages(scenario: SpeedScenario): any[] {
+async function* sseStream(resp: Response): AsyncGenerator<any> {
+  if (!resp.body) return;
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6).trim();
+      if (data === "[DONE]") return;
+      try { yield JSON.parse(data); } catch { /* skip malformed */ }
+    }
+  }
+}
+
+function buildMessages(scenario: SpeedScenario): Array<{ role: string; content: string }> {
   if (scenario.id === "cache-multiturn") {
     return buildMultiturnMessages();
   }
-
-  const system = "You are a helpful assistant.";
-  const user = getPromptText(scenario);
   return [
-    { role: "system", content: system },
-    { role: "user", content: user }
+    { role: "system", content: "You are a helpful assistant." },
+    { role: "user", content: getPromptText(scenario) }
   ];
 }
 
-function buildMultiturnMessages(): any[] {
-  const convPath = path.join(__dirname, "prompts", "conversation.json");
+function buildMultiturnMessages(): Array<{ role: string; content: string }> {
+  const convPath = path.resolve(__dirname, "../../lib/prompts/conversation.json");
   try {
-    const raw = fs.readFileSync(convPath, "utf-8");
-    return JSON.parse(raw);
+    return JSON.parse(fs.readFileSync(convPath, "utf-8"));
   } catch {
     return [
       { role: "system", content: "You are a helpful assistant." },
@@ -196,7 +236,7 @@ function getPromptText(scenario: SpeedScenario): string {
       return "Write an essay about the evolution of programming languages from the 1950s to today.";
 
     case "pp-short":
-      return loadPromptFile("short.txt") + " Explain the concept briefly.";
+      return "Explain the concept of object-oriented programming briefly.";
 
     case "stress-rapid":
       return "List three facts about space exploration.";
@@ -210,11 +250,18 @@ function getPromptText(scenario: SpeedScenario): string {
 }
 
 function loadPromptFile(filename: string): string {
-  const filePath = path.join(__dirname, "prompts", filename);
+  // Prompts live at project-root/lib/prompts/. Compiled output is 2 dirs deep (dist/lib/ or dist-cli/lib/).
+  const filePath = path.resolve(__dirname, "../../lib/prompts", filename);
   try {
     return fs.readFileSync(filePath, "utf-8");
   } catch {
-    return `Benchmark prompt (${filename} not found).`;
+    // Fallback: try sibling prompts/ dir (running from source)
+    const srcPath = path.resolve(__dirname, "prompts", filename);
+    try {
+      return fs.readFileSync(srcPath, "utf-8");
+    } catch {
+      return `(prompt file ${filename} not found)`;
+    }
   }
 }
 
@@ -230,15 +277,12 @@ function buildSummary(metrics: Record<string, any>, scenario: SpeedScenario): st
   return `TTFT: ${metrics.ttftMs}ms | TGS: ${metrics.tgsTokensPerSec.toFixed(2)} tok/s | Tokens: ${metrics.generatedTokens}`;
 }
 
-function calculateScenarioScore(metrics: any, scenario: SpeedScenario): number {
+function calculateScenarioScore(metrics: Record<string, any>, scenario: SpeedScenario): number {
   if (scenario.isCacheTest) {
-    // 1x speedup = 50, 2x speedup = 100
     return Math.min(100, (metrics.cacheSpeedup ?? 1) * 50);
   }
   if (scenario.targetTokens === 1) {
-    // Lower TTFT is better; 0ms = 100, 1000ms = 0
     return Math.max(0, 100 - (metrics.ttftMs / 10));
   }
-  // Higher TGS is better; rough normalization: 50 tok/s = 100
   return Math.min(100, metrics.tgsTokensPerSec * 2);
 }

@@ -7,6 +7,10 @@
   "version": "1.0.0",
   "description": "Performance benchmark measuring TTFT, token generation speed, prompt processing, and KV cache effectiveness across 15 scenarios.",
   "entry": "./dist/benchlocal/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madcato/SpeedBench-15"
+  },
   "samplingDefaults": {
     "temperature": 0,
     "stream": true,
