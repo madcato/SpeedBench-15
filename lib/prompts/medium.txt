@@ -1,0 +1,13 @@
+The history of computing is a rich tapestry woven from mathematics, engineering, and human ingenuity spanning more than a century. The foundations were laid in the 19th century when Charles Babbage conceived the Difference Engine and later the Analytical Engine, mechanical devices designed to perform calculations automatically. Ada Lovelace, working alongside Babbage, is credited with writing what many consider the first computer program, envisioning possibilities far beyond mere calculation.
+
+The first half of the 20th century brought electromechanical relay-based computers such as the Harvard Mark I, followed rapidly by fully electronic vacuum-tube machines. ENIAC, completed in 1945 at the University of Pennsylvania, is often cited as the first general-purpose electronic computer. It occupied an entire room, consumed enormous amounts of power, and had to be reprogrammed by physically rewiring its components.
+
+The invention of the transistor at Bell Labs in 1947 by Bardeen, Brattain, and Shockley fundamentally changed the trajectory of computing. Transistors were smaller, faster, more reliable, and consumed far less energy than vacuum tubes. Their commercialization through the 1950s enabled a new generation of computers that were more practical for business and scientific use.
+
+The integrated circuit, independently invented by Jack Kilby and Robert Noyce in 1958 and 1959 respectively, combined multiple transistors on a single piece of semiconductor material. This breakthrough ignited Moore's Law, the observation by Gordon Moore in 1965 that the number of transistors on a chip would roughly double every two years, a trend that held remarkably well for decades and drove exponential improvements in computing power and cost reduction.
+
+The minicomputer era of the 1960s and 1970s brought computing out of the exclusive domain of large institutions and into smaller organizations. Companies such as Digital Equipment Corporation introduced machines that were affordable for universities and research labs. This democratization of access seeded the next revolution: personal computing.
+
+The mid-1970s saw the emergence of the microprocessor, a complete CPU on a single chip. Intel's 4004 in 1971 and subsequent 8-bit processors enabled hobbyists and entrepreneurs to build affordable personal computers. The Altair 8800 kit in 1975 sparked enormous enthusiasm, prompting Bill Gates and Paul Allen to write a BASIC interpreter for it and found Microsoft. Apple's Steve Wozniak engineered the Apple I and then the Apple II, among the first successful mass-market personal computers.
+
+Summarize the key technological milestones described above in bullet-point form, then explain which single invention you consider most pivotal and why.

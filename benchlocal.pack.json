@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "protocolVersion": 1,
+  "id": "speedbench-15",
+  "name": "SpeedBench-15",
+  "author": "stevibe",
+  "version": "1.0.0",
+  "description": "Performance benchmark measuring TTFT, token generation speed, prompt processing, and KV cache effectiveness across 15 scenarios.",
+  "entry": "./dist/benchlocal/index.js",
+  "samplingDefaults": {
+    "temperature": 0,
+    "stream": true,
+    "request_timeout_seconds": 600
+  },
+  "capabilities": {
+    "tools": false,
+    "multiTurn": true,
+    "streamingProgress": true,
+    "verification": false
+  },
+  "theme": {
+    "accent": "#e67e22"
+  }
+}

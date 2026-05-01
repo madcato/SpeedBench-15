@@ -1,0 +1,21 @@
+{
+  "name": "speedbench-15",
+  "version": "1.0.0",
+  "description": "Performance benchmark measuring TTFT, token generation speed, prompt processing, and KV cache effectiveness across 15 scenarios.",
+  "main": "./dist/benchlocal/index.js",
+  "scripts": {
+    "build:benchlocal": "tsc -p tsconfig.benchlocal.json && tsc-alias -p tsconfig.benchlocal.json",
+    "build:cli": "tsc -p tsconfig.cli.json && tsc-alias -p tsconfig.cli.json",
+    "cli": "npm run build:cli && node dist-cli/cli/run.js",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run build:benchlocal"
+  },
+  "dependencies": {
+    "@benchlocal/core": "0.2.0",
+    "@benchlocal/sdk": "0.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "tsc-alias": "^1.8.0"
+  }
+}
