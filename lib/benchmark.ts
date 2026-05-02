@@ -10,7 +10,8 @@ export interface SpeedScenario {
 
 export interface BenchmarkScore {
   totalScore: number;
-  categories: Array<{ id: string; label: string; score: number }>;
+  totalUnit: string;
+  categories: Array<{ id: string; label: string; score: number; unit: string }>;
   summary: string;
 }
 
@@ -182,35 +183,32 @@ export function getScenarioCards(scenario: SpeedScenario): Array<{ title: string
   ];
 }
 
-export function scoreModelResults(results: any[]): BenchmarkScore {
-  const categories = [
-    "Cold Start & TTFT",
-    "Token Generation Speed",
-    "Prompt Processing Efficiency",
-    "KV Cache Effectiveness",
-    "Stress & Edge Cases"
-  ];
+const CATEGORY_DEFS = [
+  { cat: "Cold Start & TTFT",           label: "Time to First Token (ms)", unit: "ms",    id: "cold-start-&-ttft" },
+  { cat: "Token Generation Speed",       label: "Token Generation (tok/s)",  unit: "tok/s", id: "token-generation-speed" },
+  { cat: "Prompt Processing Efficiency", label: "Prompt Processing (tok/s)", unit: "tok/s", id: "prompt-processing-efficiency" },
+  { cat: "KV Cache Effectiveness",       label: "Cache Speedup (×)",         unit: "×",     id: "kv-cache-effectiveness" },
+  { cat: "Stress & Edge Cases",          label: "Stress TGS (tok/s)",        unit: "tok/s", id: "stress-&-edge-cases" }
+];
 
-  const categoryScores = categories.map(cat => {
-    // ScenarioResult only carries scenarioId, not category — resolve via SCENARIOS
+export function scoreModelResults(results: any[]): BenchmarkScore {
+  const categoryScores = CATEGORY_DEFS.map(({ cat, label, unit, id }) => {
     const catResults = results.filter(r => {
       const scenario = SCENARIOS.find(s => s.id === r.scenarioId);
       return scenario?.category === cat;
     });
-    return {
-      id: cat.toLowerCase().replace(/\s+/g, "-"),
-      label: cat,
-      score: calculateCategoryScore(catResults)
-    };
+    return { id, label, unit, score: calculateCategoryScore(catResults) };
   });
 
-  const totalScore = categoryScores.reduce((sum, c) => sum + c.score, 0) / categories.length;
-  const totalScoreRounded = Math.round(totalScore * 10) / 10;
+  // Primary metric: Token Generation Speed (tok/s)
+  const tgsCat = categoryScores.find(c => c.id === "token-generation-speed");
+  const totalScore = Math.round((tgsCat?.score ?? 0) * 10) / 10;
 
   return {
-    totalScore: totalScoreRounded,
+    totalScore,
+    totalUnit: "tok/s",
     categories: categoryScores,
-    summary: `SpeedBench-15 performance score: ${totalScoreRounded}/100`
+    summary: `Token Generation: ${totalScore.toFixed(1)} tok/s`
   };
 }
 
@@ -219,3 +217,4 @@ function calculateCategoryScore(results: any[]): number {
   const avg = results.reduce((sum, r) => sum + (r.score ?? 0), 0) / results.length;
   return Math.round(avg * 10) / 10;
 }
+

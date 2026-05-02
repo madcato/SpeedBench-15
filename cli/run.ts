@@ -58,11 +58,16 @@ async function main() {
   console.log("=".repeat(50));
 
   const scored = scoreModelResults(results);
-  console.log(`Total Score: ${scored.totalScore}/100`);
+  console.log(`Token Generation Speed : ${scored.totalScore.toFixed(1)} tok/s`);
   console.log("");
 
   for (const cat of scored.categories) {
-    console.log(`  ${cat.label.padEnd(35)} ${cat.score.toFixed(1)}/100`);
+    const value = cat.unit === "ms"
+      ? `${cat.score.toFixed(0)} ms`
+      : cat.unit === "×"
+        ? `${cat.score.toFixed(2)} ×`
+        : `${cat.score.toFixed(1)} ${cat.unit}`;
+    console.log(`  ${cat.label.padEnd(38)} ${value}`);
   }
 
   console.log("");

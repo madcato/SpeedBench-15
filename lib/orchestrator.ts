@@ -279,10 +279,10 @@ function buildSummary(metrics: Record<string, any>, scenario: SpeedScenario): st
 
 function calculateScenarioScore(metrics: Record<string, any>, scenario: SpeedScenario): number {
   if (scenario.isCacheTest) {
-    return Math.min(100, (metrics.cacheSpeedup ?? 1) * 50);
+    return Math.round((metrics.cacheSpeedup ?? 1) * 100) / 100; // speedup ratio (×)
   }
   if (scenario.targetTokens === 1) {
-    return Math.max(0, 100 - (metrics.ttftMs / 10));
+    return metrics.ttftMs; // TTFT in ms
   }
-  return Math.min(100, metrics.tgsTokensPerSec * 2);
+  return Math.round(metrics.tgsTokensPerSec * 10) / 10; // tok/s
 }
