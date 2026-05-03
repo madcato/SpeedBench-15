@@ -132,10 +132,10 @@ async function executeStreamingRun(
     body: JSON.stringify({
       model: config.model,
       messages,
-      // Add 2048 headroom so thinking models don't exhaust the budget before generating content
-      max_tokens: maxTokens + 2048,
+      max_tokens: maxTokens,
       temperature: generation.temperature ?? 0,
-      stream: true
+      stream: true,
+      chat_template_kwargs: { enable_thinking: false }
     })
   });
 
@@ -271,6 +271,9 @@ function buildSummary(metrics: Record<string, any>, scenario: SpeedScenario): st
     const cachedTtft = speedup > 0 ? Math.round(metrics.ttftMs / speedup) : metrics.ttftMs;
     return `Cache speedup: ${speedup.toFixed(2)}x | Cold TTFT: ${metrics.ttftMs}ms | Cached TTFT: ${cachedTtft}ms`;
   }
+  if (scenario.category === "Prompt Processing Efficiency") {
+    return `TTFT: ${metrics.ttftMs}ms | PP: ${metrics.ppTokensPerSec.toFixed(2)} tok/s`;
+  }
   if (scenario.targetTokens === 1) {
     return `TTFT: ${metrics.ttftMs}ms | PP: ${metrics.ppTokensPerSec.toFixed(2)} tok/s`;
   }
@@ -283,6 +286,9 @@ function calculateScenarioScore(metrics: Record<string, any>, scenario: SpeedSce
   }
   if (scenario.targetTokens === 1) {
     return metrics.ttftMs; // TTFT in ms
+  }
+  if (scenario.category === "Prompt Processing Efficiency") {
+    return Math.round(metrics.ppTokensPerSec * 10) / 10; // PP tok/s
   }
   return Math.round(metrics.tgsTokensPerSec * 10) / 10; // tok/s
 }
